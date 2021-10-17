@@ -1,1 +1,0 @@
-# 在WSL2上部署标准k8s集群并使用Prometheus监控spring cloud服务

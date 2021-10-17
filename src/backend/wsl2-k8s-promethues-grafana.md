@@ -279,7 +279,7 @@ wsl --set-default-version 2
     %sudo ALL=(ALL) NOPASSWD: /usr/sbin/enter-systemd-namespace
     ```
 
-    添加刚才的 `shell` 脚本到 `.bashrc`， 运行以下命令即可：
+    运行以下命令即添加刚才的 `shell` 脚本到 `.bashrc`：
 
     ```sh
     sudo sed -i 2a"# Start or enter a PID namespace in WSL2\nsource /usr/sbin/start-systemd-namespace\n" /etc/bash.bashrc
