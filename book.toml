@@ -1,0 +1,6 @@
+[book]
+authors = ["zaoying"]
+language = "zh-cn"
+multilingual = false
+src = "src"
+title = "zaoying blog"
