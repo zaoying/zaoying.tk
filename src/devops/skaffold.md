@@ -115,17 +115,9 @@ deploy:
 ### 前期准备
 
 * [skaffold](https://github.com/GoogleContainerTools/skaffold/releases/latest)
-* [docker cli](https://github.com/docker/cli/releases/latest)
 * [helm](https://github.com/helm/helm/releases/latest)
-* [kubectl](https://dl.k8s.io/release/v1.23.0/bin/windows/amd64/kubectl.exe)
 
-一共需要安装以上4个组件，如果你电脑已安装 [chocolatey](https://chocolatey.org/install) 等包管理器，直接运行以下命令即可一键安装
-
-```sh
-choco install -y skaffold docker-cli kubernetes-helm kubernetes-cli
-```
-
-如果不愿意安装 `chocolatey` ，也点击上述四个组件的链接，下载到本地，再讲二进制加入 `PATH` 环境变量，详细安装过程不再赘述。
+点击上述两个组件的链接，下载到本地，再讲二进制加入 `PATH` 环境变量，详细安装过程不再赘述。
 
 ### 基本开发环境配置
 
@@ -361,19 +353,239 @@ image:
 解释：helm 推荐通过 `values.yaml` 文件统一管理 `chart` 模板的变量。
 `skaffold` 也是通过修改 `values.yaml` 注入不同的镜像名称，动态更新运行中容器镜像
 
-### 配置docker和kubectl
+### 安装配置kubectl和docker
 
-#### 安装 `docker` 用于打包镜像。
-对于 `WSL1` 或者 嫌弃在 `WSL2` 安装 `docker` 环境太麻烦的 windows 用户，以及不想在本地安装 docker 的 Mac 用户，
-可以尝试安装 `redhat` 开源的 `buildah` 
+#### 安装kubectl与k8s通信
 
-```sh
-apt install buildah
+版本：v1.23.0
+* [windows amd64](https://dl.k8s.io/release/v1.23.0/bin/windows/amd64/kubectl.exe)
+* [darwin amd64](https://dl.k8s.io/release/v1.23.0/bin/darwin/amd64/kubectl)
+* [linux amd64](https://dl.k8s.io/release/v1.23.0/bin/linux/amd64/kubectl)
+
+点击上述链接，下载到本地，再讲二进制加入 `PATH` 环境变量，详细安装过程不再赘述。
+
+ `K8S配置` 一般保存在主节点的 `~/.kube` 目录下，将完整目录复制到本地目录下，打开目录下的 `.kube/config`，可以类似的内容如下：
+
+```yaml
+apiVersion: v1
+clusters:
+- cluster:
+    certificate-authority-data: "****"  # 证书颁发机构的证书
+    server: https://172.24.86.22:6443   # k8s的apiserver地址
+  name: kubernetes                      # k8s集群的名称
+contexts:
+- context:
+    cluster: kubernetes                        # 上下文的k8s集群的名称
+    user: kubernetes-admin                     # 上下文的k8s凭证的用户名称
+  name: kubernetes-admin@kubernetes
+current-context: kubernetes-admin@kubernetes   # 设置当前上下文的所使用的k8s集群
+kind: Config
+preferences: {}
+users:
+- name: kubernetes-admin             # k8s凭证的用户名称
+  user:
+    client-certificate-data: "****"  # 用户证书
+    client-key-data: "****"          # 用户密钥
+
 ```
 
-* kubectl
+然后设置环境变量 `KUBECONFIG` 指向本地的 `./kube/config` 路径，`kubectl` 便可以通过凭证与 `k8s` 的 `APIServer` 通信。
 
-### 代码热更新
+#### 安装 `docker` 用于打包镜像
+
+> 如果你的本地电脑环境存在docker环境，可以跳过docker安装配置环节
+##### 安装Docker客户端
+
+点击[这里](https://github.com/docker/cli/releases/latest)，
+下载到本地，再讲二进制加入 `PATH` 环境变量，详细安装过程不再赘述。
+
+##### 配置Docker
+
+假设你的WSL环境中存在 `Docker` 环境，又或者远程Linux服务器上存在 `Docker` 环境，
+可以通过修改 `Docker` 守护进程的配置，将 `Docker` 进程暴露到内网供其他设备进行使用。
+
+首先，编辑 `/etc/systemd/system/multi-user.target.wants/docker.service` 文件，将 `ExecStart` 行改成以下内容：
+
+```conf
+ExecStart=/usr/bin/dockerd --containerd=/run/containerd/containerd.sock
+```
+
+重点是去掉 `fd://` ，接着编辑 `/etc/docker/daemon.json` 文件，重点是 `hosts` 加上 `fd://` 和 `tcp://0.0.0.0:10086`，
+端口号可以根据实际情况调整
+
+```json
+{
+  "hosts": [
+    "fd://",
+    "tcp://0.0.0.0:10086"
+  ],
+  "registry-mirrors": [
+    "https://docker.mirrors.ustc.edu.cn/",
+    "https://dockerhub.azk8s.cn/",
+    "https://hub-mirror.c.163.com/"
+  ],
+  "exec-opts": ["native.cgroupdriver=systemd"],
+    "log-driver": "json-file",
+    "log-opts": {
+      "max-size": "100m"
+  },
+  "storage-driver": "overlay2"
+}
+```
+
+接口执行以下命令，重启 `docker`
+
+```sh
+systemctl daemon-reload
+systemctl restart docker
+```
+
+最后，在本地设置环境变量 `DOCKER_HOST=<eth0IP>:10086` ，把 `<eth0IP>` 换成远程Linux服务器的真实IP。
+在本地命令行界面，执行 `docker info` 命令检查是否设置成功。
+
+```txt
+C:\WINDOWS\system32>docker info
+Client:
+ Context:    default
+ Debug Mode: false
+ Plugins:
+  buildx: Docker Buildx (Docker Inc., v0.7.1)
+  compose: Docker Compose (Docker Inc., v2.2.1)
+  scan: Docker Scan (Docker Inc., 0.9.0)
+
+Server:
+ Containers: 0
+  Running: 0
+  Paused: 0
+  Stopped: 0
+ Images: 30
+ Server Version: 20.10.12
+ Storage Driver: overlay2
+  Backing Filesystem: extfs
+  Supports d_type: true
+  Native Overlay Diff: true
+  userxattr: false
+ Logging Driver: json-file
+ Cgroup Driver: systemd
+ Cgroup Version: 1
+ Plugins:
+  Volume: local
+  Network: bridge host ipvlan macvlan null overlay
+  Log: awslogs fluentd gcplogs gelf journald json-file local logentries splunk syslog
+ Swarm: inactive
+ Runtimes: io.containerd.runc.v2 io.containerd.runtime.v1.linux runc
+ Default Runtime: runc
+ Init Binary: docker-init
+ containerd version: 7b11cfaabd73bb80907dd23182b9347b4245eb5d
+ runc version: v1.0.2-0-g52b36a2
+ init version: de40ad0
+ Security Options:
+  seccomp
+   Profile: default
+ Kernel Version: 5.10.74.3-microsoft-standard-WSL2+
+ Operating System: Ubuntu 20.04.3 LTS
+ OSType: linux
+ Architecture: x86_64
+ CPUs: 8
+ Total Memory: 7.239GiB
+ Name: LAPTOP-MAGICBOOKPRO
+ ID: EXNQ:FGLE:MROB:C7FG:WJXC:R7YV:HUFB:6A46:4KAW:LG2A:TM3J:SAAB
+ Docker Root Dir: /var/lib/docker
+ Debug Mode: false
+ Registry: https://index.docker.io/v1/
+ Labels:
+ Experimental: false
+ Insecure Registries:
+  127.0.0.0/8
+ Registry Mirrors:
+  https://docker.mirrors.ustc.edu.cn/
+  https://dockerhub.azk8s.cn/
+  https://hub-mirror.c.163.com/
+ Live Restore Enabled: false
+```
+
+### 填写skaffold配置并运行
+
+在项目根目录下，创建 `skaffold.yaml` 文件，填写以下内容
+
+```yaml
+apiVersion: skaffold/v2beta26	                 # version of the configuration.
+kind: Config	                                 # always Config.
+metadata:
+  name: datacenter
+build:
+  local:
+    push: false
+  artifacts:
+    - image: datacenter-school         # must match in artifactOverrides
+      context: "school"
+      docker:
+        dockerfile: Dockerfile
+    - image: datacenter-teacher        # must match in artifactOverrides
+      context: "teacher"
+      docker:
+        dockerfile: Dockerfile
+    - image: datacenter-student        # must match in artifactOverrides
+      context: "student"
+      docker:
+        dockerfile: Dockerfile
+deploy:
+  helm:
+    releases:
+    - name: datacenter
+      chartPath: package
+      artifactOverrides:
+        image:
+          school: datacenter-school               # no tag present!
+          teacher: datacenter-teacher               # no tag present!
+          student: datacenter-student               # no tag present!
+      imageStrategy:
+        helm: {}
+```
+
+再执行 `skaffold dev` 命令，如果前面的步骤和配置都正确，应该可以看到以下输出
+
+```txt
+C:\Users\huang\Documents\datacenter>skaffold dev
+time="2022-02-14T00:13:29+08:00" level=warning msg="failed to detect active kubernetes cluter node platform. Specify the correct build platform in the `skaffold.yaml` file or using the `--platform` flag" subtask=-1 task=DevLoop
+Listing files to watch...
+ - datacenter-eureka
+ - datacenter-school
+ - datacenter-teacher
+ - datacenter-student
+Generating tags...
+ - datacenter-eureka -> datacenter-eureka:13577a5
+ - datacenter-school -> datacenter-school:13577a5
+ - datacenter-teacher -> datacenter-teacher:13577a5
+ - datacenter-student -> datacenter-student:13577a5
+Checking cache...
+ - datacenter-eureka: Found. Tagging
+ - datacenter-school: Found. Tagging
+ - datacenter-teacher: Found. Tagging
+ - datacenter-student: Found. Tagging
+Tags used in deployment:
+ - datacenter-eureka -> datacenter-eureka:769afdbaaf2a35acada2a56cf1d1cccbc8a8ab8196396a8ff9e2803cf6a49490
+ - datacenter-school -> datacenter-school:b89167e724932d41e40945a39ff04d84e419345957c4c0a022e7c4694153b609
+ - datacenter-teacher -> datacenter-teacher:9d013f9295b7bd3e75b68b2d8a9df434a77cbc9514df1ae36a967b6841c4328f
+ - datacenter-student -> datacenter-student:3f5267479ce35cec929485edce5f1dfc2cb1017136bbc90f2a0de5cd4f48f808
+Starting deploy...
+```
+
+### [可选]使用[Buildah](https://buildah.io/)代替Docker
+
+对于 `WSL1` 或者 嫌弃在 `WSL2` 安装 `docker` 环境太麻烦的 `windows` 用户，以及不想在本地安装 `docker` 的 `Mac` 用户，
+可以尝试安装 `redhat` 开源的 `buildah` 
+
+按照[官方教程](https://github.com/containers/buildah/blob/main/install.md)自行安装即可
+
+ `buildah` 基于 `fork` 模型，不需要 `daemon` 守护进程，因此不依赖于 `systemd` ，不需要root权限即可运行。
+ 安装完后即可使用，不需要额外的配置。但 `skaffold` 尚未提供 `buildah` 官方支持，因此需要自定义构建脚本。
+
+ ```yaml
+ # 待补充
+ ```
+
+### [可选]代码热更新
 
 代码热更新在日常的开发过程非常实用，可以加快特性开发与功能验证的效率。
 
@@ -387,11 +599,6 @@ skaffold 实现代码热更新的关键步骤是在构建环节中，跳过 `mvn
 ```yaml
 # 待补充
 ```
-
-对于 `WSL1` 或者 嫌弃在 `WSL2` 安装 `docker` 环境太麻烦的 windows 用户，
-可以尝试使用，
-甚至把本地的编译产物传输到远程具有 `Docker` 环境的 `Linux` 服务器上构建，
-从而彻底摆脱在本地构建对 `docker` 环境的依赖。
 
 ### 总结
 
