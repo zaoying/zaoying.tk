@@ -390,6 +390,7 @@ users:
 ```
 
 然后设置环境变量 `KUBECONFIG` 指向本地的 `./kube/config` 路径，`kubectl` 便可以通过凭证与 `k8s` 的 `APIServer` 通信。
+修改环境变量后，记得运行命令更新环境变量，Windows平台执行 `refreshenv` 命令。
 
 #### 安装 `docker` 用于打包镜像
 
@@ -411,6 +412,9 @@ ExecStart=/usr/bin/dockerd --containerd=/run/containerd/containerd.sock
 ```
 
 重点是去掉 `fd://` ，接着编辑 `/etc/docker/daemon.json` 文件，重点是 `hosts` 加上 `fd://` 和 `tcp://0.0.0.0:10086`，
+
+注意事项：升级docker后会覆盖当前设置，导致docker无法正常运行，需要参考上述步骤重新设置 docker.service 文件才能正常运行
+
 端口号可以根据实际情况调整
 
 ```json
@@ -441,6 +445,8 @@ systemctl restart docker
 ```
 
 最后，在本地设置环境变量 `DOCKER_HOST=<eth0IP>:10086` ，把 `<eth0IP>` 换成远程Linux服务器的真实IP。
+> 由于WSL每次重启eth0的IP会变化，需要重新设置 `DOCKER_HOST` 变量  
+
 在本地命令行界面，执行 `docker info` 命令检查是否设置成功。
 
 ```txt
@@ -543,6 +549,12 @@ deploy:
         helm: {}
 ```
 
+先执行以下命令创建 `spring-cloud` 命名空间，k8s 通过命名空间来隔离不同微服务的资源
+
+```sh
+kubectl create namespace spring-cloud
+```
+
 再执行 `skaffold dev` 命令，如果前面的步骤和配置都正确，应该可以看到以下输出
 
 ```txt
@@ -571,34 +583,100 @@ Tags used in deployment:
 Starting deploy...
 ```
 
+按 `Ctrl+C` 即可停止服务，如果 `kubernetes` 集群中依旧存在 `datacenter` 相关的资源，可以通过 `helm uninstall datacenter` 手动清除。
+
 ### [可选]使用[Buildah](https://buildah.io/)代替Docker
 
 对于 `WSL1` 或者 嫌弃在 `WSL2` 安装 `docker` 环境太麻烦的 `windows` 用户，以及不想在本地安装 `docker` 的 `Mac` 用户，
 可以尝试安装 `redhat` 开源的 `buildah` 
 
-按照[官方教程](https://github.com/containers/buildah/blob/main/install.md)自行安装即可
+按照[官方教程](https://github.com/containers/buildah/blob/main/install.md)自行安装即可。
+安装结束后运行 `buildah image`， 若遇到以下错误：
+
+ ```txt
+ kernel does not support overlay fs: 'overlay' is not supported over <unknown> at "/home/zaoying/.local/share/containers/storage/overlay": backing file system is unsupported for this graph driver
+WARN[0000] failed to shutdown storage: "kernel does not support overlay fs: 'overlay' is not supported over <unknown> at \"/home/zaoying/.local/share/containers/storage/overlay\": backing file system is unsupported for this graph driver"
+ERRO[0000] exit status 125
+ ```
+
+只需要安装 `fuse-overlayfs` 即可：
+
+```sh
+# for debian/ubuntu
+apt install fuse-overlayfs
+```
 
  `buildah` 基于 `fork` 模型，不需要 `daemon` 守护进程，因此不依赖于 `systemd` ，不需要root权限即可运行。
  安装完后即可使用，不需要额外的配置。但 `skaffold` 尚未提供 `buildah` 官方支持，因此需要自定义构建脚本。
 
  ```yaml
- # 待补充
+apiVersion: skaffold/v2beta26	                 # version of the configuration.
+kind: Config	                                 # always Config.
+metadata:
+  name: datacenter
+build:
+  local:
+    push: false
+  artifacts:
+    - image: datacenter-school         # must match in artifactOverrides
+      context: "school"
+      custom:
+        buildCommand: |
+          buildah bud -t $IMAGE -f .
+    - image: datacenter-teacher        # must match in artifactOverrides
+      context: "teacher"
+      custom:
+        buildCommand: |
+          buildah bud -t $IMAGE -f .
+    - image: datacenter-student        # must match in artifactOverrides
+      context: "student"
+      custom:
+        buildCommand: |
+          buildah bud -t $IMAGE -f .
+deploy:
+  helm:
+    releases:
+    - name: datacenter
+      chartPath: package
+      artifactOverrides:
+        image:
+          school: datacenter-school               # no tag present!
+          teacher: datacenter-teacher               # no tag present!
+          student: datacenter-student               # no tag present!
+      imageStrategy:
+        helm: {}
  ```
+
+ 更多详细的自定义构建器帮助，请查看[官方文档](https://skaffold.dev/docs/pipeline-stages/builders/custom/)
 
 ### [可选]代码热更新
 
 代码热更新在日常的开发过程非常实用，可以加快特性开发与功能验证的效率。
-
-skaffold 实现代码热更新的关键步骤是在构建环节中，跳过 `mvn package` 打包环节，
-直接将编译的中间产物，例如 `.class` 字节码文件同步到运行中的容器中，在不重启容器的前提下实现代码热更新。
+但打包到docker镜像的应用，以 `Jar` 方式运行，每次只做了很小的改动都需要重新打包镜像，耗费非常多的时间。
+因此我们需要跳过 `mvn package` 打包环节，直接将编译的中间产物 `.class` 字节码文件同步到运行中的容器中，
+从而在不重启容器的前提下实现代码热更新。
 
 理论上来说，skaffold 的代码热更新功能同时适用于 `Java` 和 `Javascript` 等技术栈。
 
-代码热更新的重点在于如何编写 skaffold 的自定义构建 `Customized` 环节代码：
+代码热更新的重点在于如何配置 `spring-boot-dev-tools` ：
 
-```yaml
-# 待补充
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-devtools</artifactId>
+        <optional>true</optional>
+    </dependency>
+</dependencies>
 ```
+
+ `skaffold` 可以解析 `Dockerfile` ，根据 `COPY` 和 `ADD` 等指令，自动选择监听和同步哪些文件。
+
+ 当修改完代码后，手动执行 `mvn clean & mvn package` 命令，`skaffold` 监听jar包变动，自动重新打包镜像并替换。
+
+ 整个过程算不上真正意思上的热更新，主要的原因是 `spring boot` 通过 `jar` 包部署。
+ 
+ 如果改为 `war` 的方式部署，就可以实现 `class` 粒度的 `热更新` 。
 
 ### 总结
 
