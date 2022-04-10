@@ -652,31 +652,164 @@ deploy:
 ### [可选]代码热更新
 
 代码热更新在日常的开发过程非常实用，可以加快特性开发与功能验证的效率。
-但打包到docker镜像的应用，以 `Jar` 方式运行，每次只做了很小的改动都需要重新打包镜像，耗费非常多的时间。
-因此我们需要跳过 `mvn package` 打包环节，直接将编译的中间产物 `.class` 字节码文件同步到运行中的容器中，
-从而在不重启容器的前提下实现代码热更新。
 
-理论上来说，skaffold 的代码热更新功能同时适用于 `Java` 和 `Javascript` 等技术栈。
+`skaffold` 可以解析 `Dockerfile` ，根据 `COPY` 和 `ADD` 等指令，自动选择监听和同步哪些文件。
 
-代码热更新的重点在于如何配置 `spring-boot-dev-tools` ：
+当修改完代码后，手动执行 `mvn clean & mvn package` 命令，`skaffold` 监听jar包变动，自动重新打包镜像并替换。
+
+整个过程算不上真正意思上的热更新，主要的原因是 `spring boot` 通过 `jar` 包部署，每次只做了很小的改动都需要重新打包镜像，耗费非常多的时间。
+
+如果改为 `exploded war` 的方式部署，就可以实现 `class` 粒度的 `热更新` 。
+
+直接跳过 `mvn package` 打包环节，直接将编译的中间产物 `.class` 字节码文件同步到运行中的容器中，从而在不重启容器的前提下实现代码热更新。
+
+> 理论上来说，skaffold 的代码热更新功能同时适用于 `Java` 和 `Javascript` 等技术栈。但限于篇幅，本文仅限于Java。
+
+首先要改造 `pom.xml` 配置，把 `<package>jar</package>` 改成 `<package>war</package>`
 
 ```xml
-<dependencies>
-    <dependency>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-devtools</artifactId>
-        <optional>true</optional>
-    </dependency>
-</dependencies>
+	<packaging>war</packaging>
 ```
 
- `skaffold` 可以解析 `Dockerfile` ，根据 `COPY` 和 `ADD` 等指令，自动选择监听和同步哪些文件。
+然后加上 `spring-boot-starter-tomcat` ，`scope` 改为 `provided`，以及增加 `start-class` 属性，填写全路径的启动类
 
- 当修改完代码后，手动执行 `mvn clean & mvn package` 命令，`skaffold` 监听jar包变动，自动重新打包镜像并替换。
+```xml
+  ...
+	<properties>
+    ...
+		<start-class>com.springcloud.eureka.SchoolApplication</start-class>
+    ...
+	</properties>
+  ...
+  <dependencys>
+    ...
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-tomcat</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    ...
+  </dependencys>
+```
 
- 整个过程算不上真正意思上的热更新，主要的原因是 `spring boot` 通过 `jar` 包部署。
- 
- 如果改为 `war` 的方式部署，就可以实现 `class` 粒度的 `热更新` 。
+打开启动类 `SpringApplication.java` ，增加 `extends SpringBootServletInitializer` 并重载 `configure` 方法
+```java
+@SpringBootApplication
+@EnableEurekaClient
+@EnableFeignClients
+public class SchoolApplication extends SpringBootServletInitializer {
+	@Override
+	protected SpringApplicationBuilder configure(SpringApplicationBuilder application) {
+	   return application.sources(SchoolApplication.class);
+	}
+
+	public static void main(String[] args) {
+		SpringApplication.run(SchoolApplication.class, args);
+	}
+}
+```
+
+接着，修改 `Dockerfile`, 如果你不愿意在生产环境采用 `war` ，这里可以另存为 `Dockerfile.dev`
+
+```Dockerfile
+FROM tomcat:9.0.62-jre11-temurin-focal
+RUN rm -rf /usr/local/tomcat/webapps.dist
+# 通过修改server.xml的方式修改端口
+RUN sed -i 's/redirectPort="8443"//' /usr/local/tomcat/conf/server.xml && sed -i 's/8005/8004/' /usr/local/tomcat/conf/server.xml && sed -i 's/8080/8084/' /usr/local/tomcat/conf/server.xml
+COPY target/exploded /usr/local/tomcat/webapps/ROOT
+COPY target/classes /usr/local/tomcat/webapps/ROOT/WEB-INF/classes
+CMD ["catalina.sh", "run"]
+```
+
+以上操作都是针对单个服务，因此每个服务都要重复一遍上述操作，但以下操作则是针对整体服务。
+
+最后修改 `skaffold.yaml` ，增加自定义构建脚本
+
+```yaml
+apiVersion: skaffold/v2beta26	                 # version of the configuration.
+kind: Config	                                 # always Config.
+metadata:
+  name: datacenter
+build:
+  local:
+    push: false
+  artifacts:
+    - image: datacenter-eureka         # must match in artifactOverrides
+      context: "eureka"
+      custom:
+        buildCommand: |
+          mvn clean package && 7z x target/eureka-0.0.1-SNAPSHOT.war -otarget/exploded && docker build -t %IMAGE% -f Dockerfile.dev %BUILD_CONTEXT%
+        dependencies:
+          paths:
+          - target/classes
+          - Dockerfile.dev
+          ignore:
+          - target/exploded
+    - image: datacenter-school         # must match in artifactOverrides
+      context: "school"
+      custom:
+        buildCommand: |
+          mvn clean package && 7z x target/school-0.0.1-SNAPSHOT.war -otarget/exploded && docker build -t %IMAGE% -f Dockerfile.dev %BUILD_CONTEXT%
+        dependencies:
+          paths:
+          - target/classes
+          - Dockerfile.dev
+          ignore:
+          - target/exploded
+    - image: datacenter-teacher        # must match in artifactOverrides
+      context: "teacher"
+      custom:
+        buildCommand: |
+          mvn clean package && 7z x target/teacher-0.0.1-SNAPSHOT.war -otarget/exploded && docker build -t %IMAGE% -f Dockerfile.dev %BUILD_CONTEXT%
+        dependencies:
+          paths:
+          - target/classes
+          - Dockerfile.dev
+          ignore:
+          - target/exploded
+    - image: datacenter-student        # must match in artifactOverrides
+      context: "student"
+      custom:
+        buildCommand: |
+          mvn clean package && 7z x target/student-0.0.1-SNAPSHOT.war -otarget/exploded && docker build -t %IMAGE% -f Dockerfile.dev %BUILD_CONTEXT%
+        dependencies:
+          paths:
+          - target/classes
+          - Dockerfile.dev
+          ignore:
+          - target/exploded
+deploy:
+  helm:
+    releases:
+    - name: datacenter
+      chartPath: package
+      artifactOverrides:
+        image:
+          eureka: datacenter-eureka               # no tag present!
+          school: datacenter-school               # no tag present!
+          teacher: datacenter-teacher               # no tag present!
+          student: datacenter-student               # no tag present!
+      imageStrategy:
+        helm: {}
+```
+
+图中所展示的 `buildCommand` 是在 `Windows` 平台执行的，如果是 `Linux` 或 `MacOS`，请参考以下命令
+
+```sh
+# 打包eureka
+mvn clean package && unzip target/eureka-0.0.1-SNAPSHOT.war -o target/exploded && docker build -t $IMAGE -f Dockerfile.dev $BUILD_CONTEXT
+
+# 打包school
+mvn clean package && unzip target/school-0.0.1-SNAPSHOT.war -o target/exploded && docker build -t $IMAGE -f Dockerfile.dev $BUILD_CONTEXT
+
+# 打包teacher
+mvn clean package && unzip target/teacher-0.0.1-SNAPSHOT.war -o target/exploded && docker build -t $IMAGE -f Dockerfile.dev $BUILD_CONTEXT
+
+# 打包student
+mvn clean package && unzip target/student-0.0.1-SNAPSHOT.war -o target/exploded && docker build -t $IMAGE -f Dockerfile.dev $BUILD_CONTEXT
+```
+
+仅第一次运行需要打包 `war` 再解压的操作，后续可通过 `mvn compile` 即可以 `class` 为粒度实现 *热更新* 
 
 ### 总结
 
