@@ -1,3 +1,14 @@
 # 后端
 
 - [如何使用OpenFeign+WebClient实现非阻塞的接口聚合](./open-feign.md)
+- [高性能编程系列——JSON优化](./json.md)
+- [高性能编程系列——锁的膨胀与优化](./lock-optimization.md)
+- [高并发编程系列——分库分表](./database-shard.md)
+- [高并发编程系列——Redis缓存](./redis-cache.md)
+- [响应式编程系列——消息队列](./message-queue.md)
+- [响应式编程系列——节流与去抖](./debounce-and-throttle.md)
+- [分布式编程系列——锁与任务调度](./distribute-lock-and-task-schedule.md)
+- [分布式编程系列——事务控制：ACID与CAP](./distributed-transcation.md)
+- [分布式编程系列——链路追踪](./full-chain-tracing.md)
+- [分布式编程系列——负载均衡](./load-balance.md)
+- [分布式编程系列——滚动升级](./rolling-update.md)
