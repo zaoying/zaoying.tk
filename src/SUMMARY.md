@@ -4,6 +4,7 @@
     - [基于ffmpeg开发在线视频播放器]()
 - [后端](./backend/SUMMARY.md)
     - [如何使用OpenFeign+WebClient实现非阻塞的接口聚合](./backend/open-feign.md)
+    - [从链式调用谈构造器模式与柯里化](./backend/chain-call.md)
     - [高性能编程系列——JSON优化](./backend/json.md)
     - [高性能编程系列——锁的膨胀与优化](./backend/lock-optimization.md)
     - [高并发编程系列——分库分表](./backend/database-shard.md)
