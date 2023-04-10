@@ -45,7 +45,7 @@ const eventNumbers = \[1,2,3,4,5,6\].filter(num => num % 2 == 0)
 
 虽然像Array、Map这样的数据结构还支持`map`、`filter`等链式操作，但很少人再提起**链式调用**，反而是隔壁Java用一个全新的词汇 **Stream API**，但Java的实现是通过Stream的抽象接口，局限于实现Collection接口的数据结构。
 
-直到后来专门去学习函数式编程，接触`柯里化` 等概念。可惜Go 对函数式编程的支持非常一般，连最基本的箭头函数都不支持，所以不打算像Rust那样使用宏实现自动柯里化，退而求其次，选择中规中矩的`OOP` 常见的构造器模式，笨是笨点，但至少容易理解和维护。
+直到后来专门去学习函数式编程，接触`柯里化` 等概念。可惜Go 对函数式编程的支持非常一般，连最基本的箭头函数都不支持，所以不打算像Rust那样使用宏实现自动柯里化，退而求其次，选择中规中矩的`OOP` 常见的`构造器模式`，笨是笨点，但至少容易理解和维护。
 
 ```go
 type LogLevel = string
@@ -69,12 +69,12 @@ func (log *AuditLog) User(user string) OperationInterface {
     return log
 }
 
-func (log \*AuditLog) Operation(op string) LevelInterface {
+func (log *AuditLog) Operation(op string) LevelInterface {
     log.Operation = op
     return log
 }
 
-func (log \*AuditLog) Debug(result string) *AuditLog {
+func (log *AuditLog) Debug(result string) *AuditLog {
     log.Level = Debug
     log.Result = result
     return log
@@ -282,3 +282,10 @@ func ImageError(code string, msg string) Response {
     return BadRequest(Extra{StatusCode: "IMG" + code, Message: msg})
 }
 ```
+
+## 总结
+
+链式调用 `Chain Call` 更像是一种俗称，它常见的实现方式有两种：CPS(Continuation Passing Style) 和 State Machine两种，
+前者是函数式的柯里化 `Currying` ，一般都是延迟求值 `lazy evaluation`，具体做法是把中间状态保存到函数栈帧中，默认是线程安全的；
+后者是面向对象的状态机 `State Machine` ，也可以做到延迟求值，具体做法是把中间状态保存到结构体中，但因为函数栈帧的大小有限，最终都会逃逸到堆上，因此性能不是最佳，默认也不是线程安全的，优点是易于理解。
+
