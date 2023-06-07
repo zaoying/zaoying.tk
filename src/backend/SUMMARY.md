@@ -3,6 +3,7 @@
 - [如何使用OpenFeign+WebClient实现非阻塞的接口聚合](./open-feign.md)
 - [从链式调用谈构造器模式与柯里化](./chain-call.md)
 - [2023再谈RESTful 和 GraphQL](./restful-vs-graphql.md)
+- [Spring依赖可视化分析与微服务模块划分](./spring-module-analyzer.md)
 - [高性能编程系列——JSON优化](./json.md)
 - [高性能编程系列——锁的膨胀与优化](./lock-optimization.md)
 - [高并发编程系列——分库分表](./database-shard.md)
