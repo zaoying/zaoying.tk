@@ -183,7 +183,7 @@ public class BeanController {
 
 这是一款基于`Qwik` \+ `Echarts` 打造，专门用于Spring模块可视化分析的工具。目前该工具使用 `tauri` 打包成Web App，支持 `Windows` `Mac` `Linux` 等平台（暂不支持win7、xp），可以根据实际需求下载安装后进行使用。
 
-打开工具后，在首页点击中间的 `打开文件` 按钮，选中上一步导出的 `beans.json` 文件，然后就自动跳转到 `依赖分析` 页面
+打开工具后，在首页点击中间的 `开始` 按钮，选中上一步导出的 `beans.json` 文件，然后就自动跳转到 `依赖分析` 页面
 
 ![](./images/dependency.png)
 
@@ -276,11 +276,11 @@ com.springcloud.school.service.BaseServiceImpl,org.springframework.data.reposito
 
 ### 可视化分析
 
-我们重新打开之前的 [Spring Module Analyzer](https://github.com/zaoying/spring-module-analyzer/releases/latest) 工具，然后点击右边 `聚类分析` 按钮，再点击下方 `打开文件` 按钮，选择之前保存 `trace.csv` 文件，然后点击 `确定` 按钮
+我们重新打开之前的 [Spring Module Analyzer](https://github.com/zaoying/spring-module-analyzer/releases/latest) 工具，然后点击右边 `链路分析` 按钮，再点击下方 `开始` 按钮，选择之前保存 `trace.csv` 文件，然后点击 `确定` 按钮
 
 ![](./images/trace.png)
 
-进入 `聚类分析` 页面，左上角 `起点` 和 `终点` 两个输入框，可以根据包名进行过滤，和之前的依赖分析大同小异
+进入 `链路分析` 页面，左上角 `起点` 和 `终点` 两个输入框，可以根据包名进行过滤，和之前的依赖分析大同小异
 
 ![](./images/cluster.png)
 
