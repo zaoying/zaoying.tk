@@ -80,8 +80,8 @@ struct Relation {
     group_id string
     status string # 根据cookie的session获取当前用户id
     # 再判断当前用户是不是当前group的管理员
-    # 如果是则管理员邀请用户，把status设置为"wait_for_admin_approve"
-    # 否则就是用户申请加入群组，把status设置为"wait_for_user_accept"
+    # 如果是则管理员邀请用户，把status设置为"wait_for_user_accept"
+    # 否则就是用户申请加入群组，把status设置为"wait_for_admin_approve"
 }
 ```
 

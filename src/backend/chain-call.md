@@ -187,7 +187,7 @@ var Unauthorized = ResponseEnum {
     MsgCn: "需要登陆"
 }
 var NotFound = ResponseEnum {
-    Code: 401,
+    Code: 404,
     MsgEn: "the requested resource is not existed",
     MsgCn: "资源不存在"
 }
