@@ -25,12 +25,12 @@ interface FunctionComponent<P = {}> {
 而 `ReactNode` 的定义更是万金油，地位相当于 Java 的 `Object` 和 Go 的 `interface{}` 。
 
 
-```
+```tsx
 type ReactNode =
         | ReactElement
         | string
         | number
-        | Iterable<reactnode>
+        | Iterable<ReactNode>
         | ReactPortal
         | boolean
         | null
@@ -74,13 +74,13 @@ export type LabelProps = {
 
 export const GetLabelID = define(() => "")
 
-export const Label: FC<labelprops> = define((props) => {
+export const Label: FC<LabelProps> = define((props) => {
     const context = useIoC()
     const id = useId()
     context.define(GetLabelID, () => id)
     
     return <>;
-        <label htmlfor={id}>{props.label}</label>
+        <label htmlFor={id}>{props.label}</label>
         {props.children}
     </>
 })
@@ -91,9 +91,9 @@ export type InputProps = {
     type?: string
     placeholder?: string
     readonly?: boolean
-    onChange?: (val: InputType) =&gt; void
-    onBlur?: (e: any) =&gt; void
-    validate?: (val: InputType) =&gt; string
+    onChange?: (val: InputType) => void
+    onBlur?: (e: any) => void
+    validate?: (val: InputType) => string
 }
 
 function transformValue(val: InputType)  {
@@ -103,7 +103,7 @@ function transformValue(val: InputType)  {
     return val
 }
 
-export const Input: FC<inputprops> = define((props) =&gt; {    
+export const Input: FC<InputProps> = define((props) => {    
     const context = useIoC()
     const labelId = context.inject(GetLabelID)({})
 
@@ -140,20 +140,19 @@ export const Input: FC<inputprops> = define((props) =&gt; {
 有位网友建议给每个组件都套上一层 `IoCContext.Provider` ：
 
 ```tsx
-export const Label: FC<LabelProps> = define((props) =&gt; {
+export const Label: FC<LabelProps> = define((props) => {
     const parent = useIoC()
     const context = NewIoCContext(parent)
     const id = useId()
-    context.define(GetLabelID, () =&gt; id)
+    context.define(GetLabelID, () => id)
     
-    return &lt;&gt;
-        <Label htmlfor={id}>{props.label}</Label>
+    return <>
+        <Label htmlFor={id}>{props.label}</Label>
         <IoCContext.Provider value="{context}">
             {props.children}
-        </Poccontext.Provider>
-    
+        </IoCContext.Provider>
+    </>
 })
-</labelprops>
 ```
 
 这样的做法是暂时解决问题，但并不是所有的场景都需要套上一层额外的 Provider。
@@ -179,7 +178,7 @@ export type LabelProps = {
 export const Label: FC<LabelProps> = define((props) => {
     const id = useId()
     return <>
-        <label htmlfor={id}>{props.label}</label>
+        <label htmlFor={id}>{props.label}</label>
         {
             props.children({id})
         }
@@ -248,16 +247,16 @@ const field = <Label id={id} label="用户名">
     <Tab>Three</tab>
   </Tablist>
 
-  Tabpanels>
+  <TabPanels>
     <TabPanel>
       <p>one!</p>
     </TabPanel>
     <TabPanel>
       <p>two!</p>
     </TabPanel>
-    <TabpPnel>
+    <TabPanel>
       <p>three!</p>
-    </TabpPnel>
+    </TabPanel>
   </TabPanels>
 </Tabs>
 ```
@@ -270,10 +269,10 @@ const field = <Label id={id} label="用户名">
 
 以下是我的做法：
 ```tsx
-<Tab activetab="abc">
-    <Tabitem title="abc">123</tabitem>
-    <Tabitem title="def">456</tabitem>
-    <Tabitem title="ghi">789</tabitem>
+<Tab activeTab="abc">
+    <TabItem title="abc">123</TabItem>
+    <TabItem title="def">456</TabItem>
+    <TabItem title="ghi">789</TabItem>
 </Tab>
 ```
 
@@ -307,7 +306,7 @@ export const TabItem: FC<TabItemProps> = define((tab) => {
 `TabPropsDispatcher` 是父组件 `Tab` 定义的，就是 `const [props, setProps] = useState()` 的 `setProps`。
 
 第一步是 `Tab` 组件定义 `TabPropsDispatcher` 注入到 `TabItem` ，
-然后 `TabItem` 通过依赖注入获得 `TabPorpsDispather` ，
+然后 `TabItem` 通过依赖注入获得 `TabPropsDispatcher` ，
 最后把当前页签的标题 `title` 和内容 `content` 注册到父级组件。
 
 > 最后一步，要求 `title` 必须是唯一的，注册到父组件那一步出现 **在组件渲染的过程中使用hook修改属性** ，按照 React 官方的说法，这么做是会导致无限循环，所以注册到父组件的函数会判断一下 `title` 是否已存在，如果已存在就停止修改属性，从而避免渲染陷入无限循环。
@@ -355,23 +354,23 @@ const columns = [
 ];
 
 ;
-<Table datasource="{dataSource}" columns="{columns}"></Table>
+<Table dataSource="{dataSource}" columns="{columns}"></Table>
 ```
 
 下面通过把 children 类型改成 `FC<{name: string, rowNum: number, data: any}>` ，就可以让代码简洁不少：
 
 ```tsx
 <Table data="{[]}">
-    <Tablecolumn name="id" title="编号" width="{10}">
+    <TableColumn name="id" title="编号" width="{10}">
         {({data}) => <input type="checkbox" name="ids" value={data.id}>}
-    </Tablecolumn>
-    <Tablecolumn name="name" title="名字" width="{40}">
+    </TableColumn>
+    <TableColumn name="name" title="名字" width="{40}">
         {({data}) => data.name}
-    </Tablecolumn>
-    <Tablecolumn name="age" title="年龄" width="{20}">
+    </TableColumn>
+    <TableColumn name="age" title="年龄" width="{20}">
         {({data}) => data.age}
-    </Tablecolumn>
-    <Tablecolumn name="operation" title="操作" width="{20}">
+    </TableColumn>
+    <TableColumn name="operation" title="操作" width="{20}">
         {
             ({rowNum}) => {
                 const setTable = inject(TablePropsDispatcher)
@@ -379,7 +378,7 @@ const columns = [
                 return <button type="danger" onclick={()=> ctl.removeData(rowNum)}>删除</button>
             }
         }
-    </Tablecolumn>
+    </TableColumn>
 </Table>
 ```
 
@@ -397,7 +396,7 @@ const columns = [
 <ParentComponent>
   {
       // 向子组件传递参数，不需要对外暴露任何内部属性，功能更内聚
-      (props) => <ChilrdComponent>{props.fromParent}</ChilrdComponent>
+      (props) => <ChildComponent>{props.fromParent}</ChildComponent>
   }
   {
       // 返回空的子组件，做一些带有副作用的操作：从远端服务获取数据
@@ -409,7 +408,7 @@ const columns = [
 </ParentComponent>
 ```
 
-这样的代码看起来更直观易懂，因为所有与 `ParentComponet` 相关的代码都在 `ParentComponent` 组件内部，没有对外暴露任何的内部属性，使得组件的功能更加内聚，提供代码的健壮性。
+这样的代码看起来更直观易懂，因为所有与 `ParentComponent` 相关的代码都在 `ParentComponent` 组件内部，没有对外暴露任何的内部属性，使得组件的功能更加内聚，提供代码的健壮性。
 
 ## 总结
 
